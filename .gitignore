@@ -1,0 +1,54 @@
+# Arquivos e diretórios do Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Arquivos de logs e dumps
+*.log
+*.pot
+*.pid
+*.pyc
+
+# Arquivos de virtual environment
+venv/
+.env/
+.envrc
+.python-version
+.Python
+pip-log.txt
+
+# Configurações do Jupyter Notebook
+.ipynb_checkpoints
+
+# Configurações de IDEs e editores de texto
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Arquivos do sistema operacional
+.DS_Store
+Thumbs.db
+
+# Configurações do pytest
+.pytest_cache/
+.tox/
+
+# Cobertura de código
+htmlcov/
+.coverage
+*.cover
+*.py,cover
+.cache
+nosetests.xml
+coverage.xml
+*.coveragerc
+
+# Diretórios do MyPy e arquivos temporários do Python
+.mypy_cache/
+.dmypy.json
