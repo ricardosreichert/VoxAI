@@ -4,13 +4,13 @@ import whisper
 import tempfile
 import wave
 import os
-import tempfile
 import requests
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 import warnings
-from fastapi.responses import HTMLResponse
+from langchain.llms.base import LLM
+from langchain.prompts import PromptTemplate
 
 # Suprimir o aviso específico de FP16 no Whisper
 warnings.filterwarnings("ignore", message="FP16 is not supported on CPU; using FP32 instead")
@@ -34,11 +34,51 @@ app.add_middleware(
 )
 
 # Inicializa o modelo Whisper
-model = whisper.load_model("tiny").to("cpu")
-
+whisper_model = whisper.load_model("tiny").to("cpu")
 
 # URL do endpoint do modelo LLaMA 3.2 no contêiner local
 LLAMA_ENDPOINT = "http://localhost:11434/api/generate"
+
+class LLAMAEndpointLLM(LLM):
+    """Custom LLM class to interact with LLaMA via HTTP endpoint."""
+
+    endpoint_url: str
+
+    def _call(self, prompt: str, stop=None) -> str:
+        payload = {
+            "prompt": prompt,
+            "stream": False,
+            "model": "llama3.2"
+        }
+
+        headers = {
+            "Content-Type": "application/json"
+        }
+
+        response = requests.post(self.endpoint_url, json=payload, headers=headers)
+        response.raise_for_status()
+        llama_response = response.json().get("response", "Erro na resposta do LLaMA")
+        return llama_response
+
+    @property
+    def _identifying_params(self):
+        return {"endpoint_url": self.endpoint_url}
+
+    @property
+    def _llm_type(self) -> str:
+        return "llama_endpoint_llm"
+
+# Instancia o LLM personalizado
+llm = LLAMAEndpointLLM(endpoint_url=LLAMA_ENDPOINT)
+
+# Define um template de prompt (opcional)
+prompt_template = """Você é um assistente útil.
+
+Usuário: {input}
+
+Assistente:"""
+
+prompt = PromptTemplate(template=prompt_template, input_variables=["input"])
 
 @app.get("/")
 async def get():
@@ -49,12 +89,10 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("WebSocket conectado")
 
-    audio_chunks = []
     try:
         while True:
             # Recebe o áudio como um blob binário
             audio_chunk = await websocket.receive_bytes()
-            audio_chunks.append(audio_chunk)
 
             # Temporariamente salva os dados recebidos para processar em tempo real
             with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_file:
@@ -62,16 +100,16 @@ async def websocket_endpoint(websocket: WebSocket):
                 temp_file_path = temp_file.name
 
             # Processa o áudio com Whisper
-            transcription = model.transcribe(temp_file_path)
+            transcription = whisper_model.transcribe(temp_file_path)
 
             # Exibe a transcrição no console
             print("Transcrição:", transcription["text"])
 
-            # Envia a transcrição ao modelo LLaMA 3.2 e recebe a resposta
+            # Envia a transcrição ao modelo LLaMA e recebe a resposta
             response = process_with_llama(transcription["text"])
             print("Resposta do LLaMA:", response)
 
-            # Envia a transcrição de volta ao cliente
+            # Envia a resposta de volta ao cliente
             await websocket.send_text(response)
 
             # Remove o arquivo temporário
@@ -84,40 +122,19 @@ async def websocket_endpoint(websocket: WebSocket):
         print(f"Erro durante a transcrição: {e}")
 
     finally:
-        # Fecha a conexão WebSocket apenas se ainda estiver aberta
-        if not connection_closed:
-            await websocket.close()
+        # Fecha a conexão WebSocket
+        await websocket.close()
         print("WebSocket desconectado")
 
-
 def process_with_llama(transcription: str) -> str:
-    """Envia o texto transcrito para o modelo LLaMA 3.2 e retorna a resposta."""
+    """Usa LangChain para processar a transcrição com o modelo LLaMA."""
     try:
-        # Formata a requisição conforme o exemplo especificado
-        payload = {
-            "prompt": transcription,
-            "stream": False,
-            "model": "llama3.2"
-        }
-
-        headers = {
-            "Content-Type": "application/json"
-        }
-
-        # Log para inspecionar o payload antes de enviá-lo
-        print("Payload enviado para LLaMA:", payload)
-
-        # Realiza a requisição HTTP POST para o modelo LLaMA
-        response = requests.post(LLAMA_ENDPOINT, json=payload, headers=headers)
-
-        print("Response: ", response)
-
-        response.raise_for_status()
-
-        # Extrai o texto da resposta
-        llama_response = response.json().get("response", "Erro na resposta do LLaMA")
-        return llama_response
-
-    except requests.exceptions.RequestException as e:
-        print(f"Erro ao conectar com o LLaMA: {e}")
+        # Formata o prompt manualmente
+        prompt_text = prompt.format(input=transcription)
+        # Usa o LLM para gerar a resposta usando 'invoke' em vez de '__call__'
+        response = llm.invoke(prompt_text)
+        return response.strip()
+    except Exception as e:
+        print(f"Erro ao processar com LLaMA: {e}")
         return "Erro ao processar a resposta do modelo LLaMA."
+
