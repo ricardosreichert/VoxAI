@@ -72,7 +72,7 @@ class LLAMAEndpointLLM(LLM):
 llm = LLAMAEndpointLLM(endpoint_url=LLAMA_ENDPOINT)
 
 # Define um template de prompt (opcional)
-prompt_template = """Você é um assistente útil.
+prompt_template = """Você é um assistente feminino, útil, prestativo, que responde sempre em portugues de forma curta e objetiva.
 
 Usuário: {input}
 
@@ -105,12 +105,20 @@ async def websocket_endpoint(websocket: WebSocket):
             # Exibe a transcrição no console
             print("Transcrição:", transcription["text"])
 
-            # Envia a transcrição ao modelo LLaMA e recebe a resposta
-            response = process_with_llama(transcription["text"])
-            print("Resposta do LLaMA:", response)
+            # Envia um objeto JSON com a transcrição
+            await websocket.send_json({
+                "transcription": transcription["text"]
+            })
 
-            # Envia a resposta de volta ao cliente
-            await websocket.send_text(response)
+            # Envia a transcrição ao modelo LLaMA e recebe a resposta
+            llama_response = process_with_llama(transcription["text"])
+            print("Resposta do LLaMA:", llama_response)
+
+            # Envia um objeto JSON com a transcrição e a resposta do LLaMA de volta ao cliente
+            await websocket.send_json({
+                "transcription": transcription["text"],
+                "llama": llama_response
+            })
 
             # Remove o arquivo temporário
             os.remove(temp_file_path)
