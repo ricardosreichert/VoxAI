@@ -120,6 +120,15 @@ async def websocket_endpoint(websocket: WebSocket):
                 "llama": llama_response
             })
 
+            # Define o nome da voz (ajuste conforme necessário)
+            voice_name = "man"  # ou "woman"
+
+            # Sintetiza a fala com XTTS
+            audio_bytes = xtts_handler.synthesize(llama_response, voice_name)
+
+            # Envia o áudio pelo socket
+            await websocket.send_bytes(audio_bytes)
+
             # Remove o arquivo temporário
             os.remove(temp_file_path)
 
