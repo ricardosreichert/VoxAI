@@ -4,6 +4,7 @@ import whisper
 import tempfile
 import wave
 import os
+import time
 import requests
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse
@@ -11,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import warnings
 from langchain.llms.base import LLM
 from langchain.prompts import PromptTemplate
-from xtts_handler import XtTSHandler
+from xtts_handler import XTTSHandler
 
 # Suprimir o aviso específico de FP16 no Whisper
 warnings.filterwarnings("ignore", message="FP16 is not supported on CPU; using FP32 instead")
@@ -35,7 +36,8 @@ app.add_middleware(
 )
 
 # Inicializa o modelo Whisper
-whisper_model = whisper.load_model("tiny").to("cpu")
+# Definir cpu ou cuda
+whisper_model = whisper.load_model("tiny").to("cuda")
 
 # URL do endpoint do modelo LLaMA 3.2 no contêiner local
 LLAMA_ENDPOINT = "http://localhost:11434/api/generate"
@@ -81,6 +83,9 @@ Assistente:"""
 
 prompt = PromptTemplate(template=prompt_template, input_variables=["input"])
 
+# Cria uma instância do manipulador XTTS
+xtts_handler = XTTSHandler()
+
 @app.get("/")
 async def get():
     return HTMLResponse("<h1>WebSocket Audio Transcription Server</h1>")
@@ -122,10 +127,17 @@ async def websocket_endpoint(websocket: WebSocket):
             })
 
             # Define o nome da voz (ajuste conforme necessário)
-            voice_name = "man"  # ou "woman"
+            voice_name = "man"  # man ou "woman"
 
             # Sintetiza a fala com XTTS
             audio_bytes = xtts_handler.synthesize(llama_response, voice_name)
+
+            # Gera um nome de arquivo para salvar o áudio sintetizado
+            filename = f"audios/generated_{int(time.time())}.wav"
+
+            # Salva o arquivo de áudio na pasta 'audios/'
+            with open(filename, "wb") as f:
+                f.write(audio_bytes)
 
             # Envia o áudio pelo socket
             await websocket.send_bytes(audio_bytes)
@@ -149,8 +161,8 @@ def process_with_llama(transcription: str) -> str:
     try:
         # Formata o prompt manualmente
         prompt_text = prompt.format(input=transcription)
-        # Usa o LLM para gerar a resposta usando 'invoke' em vez de '__call__'
-        response = llm.invoke(prompt_text)
+
+        response = llm(prompt_text)
         return response.strip()
     except Exception as e:
         print(f"Erro ao processar com LLaMA: {e}")

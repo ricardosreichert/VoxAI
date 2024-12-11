@@ -4,7 +4,7 @@ from scipy.io.wavfile import write
 import io
 import os
 
-class XtTSHandler:
+class XTTSHandler:
     def __init__(self, model_path="./XTTS-v2/", config_path="./XTTS-v2/config.json", audios_dir="./audios"):
         self.config = XttsConfig()
         self.config.load_json(config_path)

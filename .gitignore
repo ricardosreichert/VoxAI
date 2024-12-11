@@ -52,3 +52,4 @@ coverage.xml
 # Diretórios do MyPy e arquivos temporários do Python
 .mypy_cache/
 .dmypy.json
+XTTS-v2
