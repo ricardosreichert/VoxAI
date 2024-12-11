@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import warnings
 from langchain.llms.base import LLM
 from langchain.prompts import PromptTemplate
+from xtts_handler import XtTSHandler
 
 # Suprimir o aviso específico de FP16 no Whisper
 warnings.filterwarnings("ignore", message="FP16 is not supported on CPU; using FP32 instead")
