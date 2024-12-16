@@ -1,30 +1,57 @@
-# Usar uma imagem base do Python
-FROM python:3.11-slim
+ARG BASE=nvidia/cuda:11.8.0-base-ubuntu22.04
+FROM ${BASE}
 
-# Definir o diretório de trabalho
-WORKDIR /app
-
-# Instalar Git LFS e outras dependências necessárias para o sistema
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# System dependencies
+RUN apt-get update && apt-get upgrade -y
+RUN apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    make \
+    python3 \
+    python3-dev \
+    python3-pip \
+    python3-venv \
+    python3-wheel \
+    espeak-ng \
+    libsndfile1-dev \
+    wget \
     git-lfs \
-    libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Clonar o repositório XTTS com suporte a Git LFS
-RUN git lfs install \
-    && git clone https://huggingface.co/coqui/XTTS-v2
+# Create and activate virtual environment
+ENV VIRTUAL_ENV=/opt/venv
+RUN python3 -m venv $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-# Instalar pacotes Python necessários
-RUN pip install --no-cache-dir TTS scipy
+RUN apt-get update && apt-get upgrade -y
+RUN apt-get install -y --no-install-recommends nano gcc g++ make python3 python3-dev python3-pip python3-venv python3-wheel espeak-ng libsndfile1-dev && rm -rf /var/lib/apt/lists/*
+RUN pip3 install llvmlite --ignore-installed
 
-# Copiar o arquivo requirements.txt para o diretório de trabalho
-COPY requirements.txt .
+# Install Dependencies:
+RUN pip3 install torch torchaudio --extra-index-url https://download.pytorch.org/whl/cu118
+RUN rm -rf /root/.cache/pip
 
-# Instalar pacotes Python necessários
-RUN pip install --no-cache-dir -r requirements.txt
+# Clone the TTS repository
+WORKDIR /root
+RUN git clone https://github.com/coqui-ai/TTS.git /root/TTS
 
-# Copiar o arquivo Python da aplicação para o diretório de trabalho
-COPY main.py main.py
+# Install TTS
+COPY main.py /root
+COPY xtts_handler.py /root
+COPY audios/* /root/audios/
 
-# Comando para rodar quando o contêiner iniciar
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "65535"]
+WORKDIR /root/TTS
+RUN make deps
+
+# Clone the XTTS repository
+WORKDIR /root
+RUN git lfs install && git clone https://huggingface.co/coqui/XTTS-v2 /root/XTTS-v2
+
+# Install Dependencies:
+RUN pip install librosa requests websockets uvicorn fastapi python-multipart whisper openai-whisper "langchain==0.0.179"
+
+EXPOSE 7777
+
+# Start an interactive shell
+#CMD ["tail", "-f", "/dev/null"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7777"] 

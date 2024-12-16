@@ -1,3 +1,5 @@
+import sys
+sys.path.append('/root/TTS')
 from TTS.tts.configs.xtts_config import XttsConfig
 from TTS.tts.models.xtts import Xtts
 from scipy.io.wavfile import write
