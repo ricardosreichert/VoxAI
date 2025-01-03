@@ -21,6 +21,7 @@ venv/
 .python-version
 .Python
 pip-log.txt
+.idx
 
 # Configurações do Jupyter Notebook
 .ipynb_checkpoints

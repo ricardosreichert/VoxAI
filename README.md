@@ -35,7 +35,7 @@ VOICE_NAME=man
 Na raiz do projeto, execute o seguinte comando:
 
 ```bash
-docker-compose up --build
+docker-compose up -d --build
 ```
 
 Isso irá:
