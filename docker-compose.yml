@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  ollama-ai:
+    image: ollama/ollama:latest
+    container_name: ollama-ai
+    ports:
+      - '11434:11434' # Porta exposta para o endpoint LLaMA
+    volumes:
+      - ollama-ai:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - app_network
+    entrypoint: >
+      /bin/bash -c "
+      echo 'Starting Ollama...' &&
+      /usr/bin/ollama serve &
+      sleep 5 &&
+      /usr/bin/ollama run $LLAMA_MODEL &&
+      /usr/bin/ollama ps &&
+      tail -f /dev/null
+      "
+    env_file:
+      - .env
+
+  api:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+      args:
+        PORT: ${PORT}
+    container_name: api_container
+    ports:
+      - '${PORT}:${PORT}' # Porta exposta para a API FastAPI
+    networks:
+      - app_network
+    environment:
+      - LLAMA_ENDPOINT=$LLAMA_ENDPOINT
+      - PORT=$PORT
+      - WHISPER_MODEL=$WHISPER_MODEL
+      - WHISPER_DEVICE=$WHISPER_DEVICE
+    env_file:
+      - .env
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  ollama-ai:
+
+networks:
+  app_network:
+    driver: bridge

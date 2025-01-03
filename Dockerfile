@@ -7,6 +7,7 @@ RUN apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     make \
+    ffmpeg \
     python3 \
     python3-dev \
     python3-pip \
@@ -47,11 +48,34 @@ RUN make deps
 WORKDIR /root
 RUN git lfs install && git clone https://huggingface.co/coqui/XTTS-v2 /root/XTTS-v2
 
-# Install Dependencies:
-RUN pip install librosa requests websockets uvicorn fastapi python-multipart whisper openai-whisper "langchain==0.0.179"
+# Set write permissions for the working directory
+RUN mkdir -p /root/audios && chmod -R 777 /root
+RUN chown -R 1000:1000 /root
 
-EXPOSE 7777
+# Install Dependencies:
+RUN pip install --no-cache-dir \
+    librosa \
+    python-dotenv \
+    requests \
+    websockets \
+    uvicorn \
+    fastapi \
+    python-multipart \
+    whisper \
+    openai-whisper \
+    "langchain==0.0.179"
+
+# Define o argumento PORT vindo do docker-compose
+ARG PORT
+
+# Exporta a porta definida pelo argumento
+ENV PORT=${PORT}
+EXPOSE ${PORT}
+
+
+# Define a permissão para criação e escrita de arquivos
+RUN chmod -R 777 /root
 
 # Start an interactive shell
 #CMD ["tail", "-f", "/dev/null"]
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7777"] 
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT}"]

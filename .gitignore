@@ -16,7 +16,7 @@ build/
 
 # Arquivos de virtual environment
 venv/
-.env/
+.env
 .envrc
 .python-version
 .Python
