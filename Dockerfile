@@ -35,6 +35,7 @@ RUN git clone https://github.com/coqui-ai/TTS.git /root/TTS
 # Copy application files
 COPY main.py /root
 COPY xtts_handler.py /root
+COPY warnings_filters.py /root
 COPY audios/* /root/audios/
 
 # Install TTS dependencies
