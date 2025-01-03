@@ -16,11 +16,12 @@ build/
 
 # Arquivos de virtual environment
 venv/
-.env/
+.env
 .envrc
 .python-version
 .Python
 pip-log.txt
+.idx
 
 # Configurações do Jupyter Notebook
 .ipynb_checkpoints
@@ -52,3 +53,4 @@ coverage.xml
 # Diretórios do MyPy e arquivos temporários do Python
 .mypy_cache/
 .dmypy.json
+XTTS-v2
