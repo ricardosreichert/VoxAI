@@ -9,12 +9,12 @@ import requests
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
-import warnings
 from langchain.llms.base import LLM
 from langchain.prompts import PromptTemplate
-from xtts_handler import XTTSHandler
 from dotenv import load_dotenv
 import logging
+import torch
+import warnings_filters
 
 # Carrega as variáveis do arquivo .env
 load_dotenv()
@@ -26,8 +26,7 @@ LLAMA_ENDPOINT = os.getenv("LLAMA_ENDPOINT")
 WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cuda")  # Padrão para 'cuda' se não especificado
 WHISPER_MODEL_NAME = os.getenv("WHISPER_MODEL", "base")  # Modelo padrão: 'base'
 DEBUG_MODE = os.getenv("DEBUG_MODE", "false").lower() == "true"
-VOICE_NAME = os.getenv("VOICE_NAME", "man") # man ou "woman"
-
+VOICE_NAME = os.getenv("VOICE_NAME", "man")  # man ou "woman"
 
 # Configuração do logger
 logging.basicConfig(
@@ -36,15 +35,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Suprimir o aviso específico de FP16 no Whisper
-warnings.filterwarnings("ignore", message="FP16 is not supported on CPU; using FP32 instead")
-
-# Suprime o aviso específico sobre `weights_only` no Whisper
-warnings.filterwarnings(
-    "ignore",
-    message=r"You are using `torch.load` with `weights_only=False`",
-    category=FutureWarning,
-)
+# Verifica a disponibilidade de GPU para ajustar Whisper e XTTS
+gpu_available = torch.cuda.is_available()
+logger.info(f"GPU disponível: {gpu_available}")
+if not gpu_available:
+    WHISPER_DEVICE = "cpu"  # Força o uso de CPU para o Whisper
+    logger.warning("GPU não disponível. Whisper será executado no modo CPU.")
 
 logger.debug(f"Running API on port {PORT}")
 logger.debug(f"Using LLaMA model: {LLAMA_MODEL}")
@@ -64,6 +60,14 @@ app.add_middleware(
 
 # Inicializa o modelo Whisper
 whisper_model = whisper.load_model(WHISPER_MODEL_NAME).to(WHISPER_DEVICE)
+
+if gpu_available:
+    from xtts_handler import XTTSHandler
+    # Cria uma instância do manipulador XTTS
+    xtts_handler = XTTSHandler()
+else:
+    logger.warning("GPU não disponível. Módulo XTTS será desativado.")
+    xtts_handler = None
 
 class LLAMAEndpointLLM(LLM):
     """Custom LLM class to interact with LLaMA via HTTP endpoint."""
@@ -105,9 +109,6 @@ Usuário: {input}
 Assistente:"""
 
 prompt = PromptTemplate(template=prompt_template, input_variables=["input"])
-
-# Cria uma instância do manipulador XTTS
-xtts_handler = XTTSHandler()
 
 @app.get("/")
 async def get():
@@ -153,21 +154,22 @@ async def websocket_endpoint(websocket: WebSocket):
             })
             logger.debug("Resposta do LLaMA enviada ao cliente")
 
-            # Sintetiza a fala com XTTS
-            audio_bytes = xtts_handler.synthesize(llama_response, VOICE_NAME)
-            logger.debug("Áudio sintetizado gerado com sucesso")
+            if xtts_handler:
+                # Sintetiza a fala com XTTS
+                audio_bytes = xtts_handler.synthesize(llama_response, VOICE_NAME)
+                logger.debug("Áudio sintetizado gerado com sucesso")
 
-            # Gera um nome de arquivo para salvar o áudio sintetizado
-            filename = f"audios/generated_{int(time.time())}.wav"
+                # Gera um nome de arquivo para salvar o áudio sintetizado
+                filename = f"audios/generated_{int(time.time())}.wav"
 
-            # Salva o arquivo de áudio na pasta 'audios/'
-            with open(filename, "wb") as f:
-                f.write(audio_bytes)
-            logger.debug(f"Áudio sintetizado salvo em {filename}")
+                # Salva o arquivo de áudio na pasta 'audios/'
+                with open(filename, "wb") as f:
+                    f.write(audio_bytes)
+                logger.debug(f"Áudio sintetizado salvo em {filename}")
 
-            # Envia o áudio pelo socket
-            await websocket.send_bytes(audio_bytes)
-            logger.debug("Áudio sintetizado enviado ao cliente")
+                # Envia o áudio pelo socket
+                await websocket.send_bytes(audio_bytes)
+                logger.debug("Áudio sintetizado enviado ao cliente")
 
             # Remove o arquivo temporário
             os.remove(temp_file_path)
